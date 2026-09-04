@@ -3,9 +3,314 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rhavi Lar 269004</title>
+    <title>Car Game - Rhavi Lar</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #1a1a2e;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            color: #fff;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+            font-size: 28px;
+            letter-spacing: 2px;
+            color: #e94560;
+        }
+
+        #score {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+
+        #game-area {
+            position: relative;
+            width: 400px;
+            height: 600px;
+            background: #2d2d44;
+            border: 4px solid #e94560;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 0 30px rgba(233, 69, 96, 0.3);
+        }
+
+        #road {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 300px;
+            height: 100%;
+            background: #333;
+            border-left: 6px solid #fff;
+            border-right: 6px solid #fff;
+        }
+
+        .lane-marker {
+            position: absolute;
+            width: 6px;
+            height: 60px;
+            background: #ffd700;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .car {
+            position: absolute;
+            width: 50px;
+            height: 90px;
+            border-radius: 10px;
+        }
+
+        #player {
+            bottom: 30px;
+            background: linear-gradient(180deg, #4ecdc4, #2c9e92);
+            border: 3px solid #fff;
+            z-index: 2;
+        }
+
+        .enemy {
+            background: linear-gradient(180deg, #e94560, #a01830);
+            border: 3px solid #666;
+            z-index: 1;
+        }
+
+        #road-markings {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 6px;
+            height: 600px;
+            background: repeating-linear-gradient(
+                to bottom,
+                #ffd700 0 60px,
+                transparent 60px 120px
+            );
+        }
+
+        #game-over {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            text-align: center;
+            padding: 20px;
+        }
+
+        #game-over h2 {
+            font-size: 32px;
+            margin-bottom: 20px;
+            color: #e94560;
+        }
+
+        #game-over p {
+            font-size: 20px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            background: #e94560;
+            color: #fff;
+            border: none;
+            padding: 12px 30px;
+            font-size: 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover { background: #a01830; }
+
+        #instructions {
+            margin-top: 12px;
+            font-size: 14px;
+            color: #aaa;
+            text-align: center;
+        }
+    </style>
 </head>
 <body>
-    <h1>Rhavi Lar 269004</h1>
+    <h1>🚗 CAR GAME</h1>
+    <div id="score">Pontos: 0</div>
+
+    <div id="game-area">
+        <div id="road">
+            <div id="road-markings"></div>
+        </div>
+        <div id="player" class="car"></div>
+        <div id="game-over">
+            <h2>💥 GAME OVER</h2>
+            <p id="final-score">Sua pontuação: 0</p>
+            <p id="record">Recorde: 0</p>
+            <button onclick="startGame()">Jogar de novo</button>
+        </div>
+    </div>
+
+    <div id="instructions">
+        ⬅️ ➡️ Setas ou A/D para mover &nbsp;&nbsp;|&nbsp;&nbsp; P para pausar
+    </div>
+
+    <script>
+        const gameArea = document.getElementById('game-area');
+        const player = document.getElementById('player');
+        const enemyContainer = document.getElementById('road');
+        const scoreDisplay = document.getElementById('score');
+        const gameOverScreen = document.getElementById('game-over');
+        const finalScoreDisplay = document.getElementById('final-score');
+        const recordDisplay = document.getElementById('record');
+
+        const ROAD_WIDTH = 300;
+        const PLAYER_WIDTH = 50;
+        const PLAYER_SPEED = 8;
+
+        let score = 0;
+        let speed = 4;
+        let gameRunning = false;
+        let paused = false;
+        let record = localStorage.getItem('record') || 0;
+        recordDisplay.textContent = 'Recorde: ' + record;
+
+        let playerX = (ROAD_WIDTH / 2) - (PLAYER_WIDTH / 2);
+        player.style.left = (50 + playerX) + 'px';
+
+        const keys = {};
+
+        document.addEventListener('keydown', (e) => {
+            keys[e.key.toLowerCase()] = true;
+            if (e.key === 'p' || e.key === 'P') togglePause();
+        });
+        document.addEventListener('keyup', (e) => {
+            keys[e.key.toLowerCase()] = false;
+        });
+
+        function togglePause() {
+            if (!gameRunning) return;
+            paused = !paused;
+        }
+
+        function startGame() {
+            gameOverScreen.style.display = 'none';
+            score = 0;
+            speed = 4;
+            gameRunning = true;
+            paused = false;
+            updateScore();
+
+            // Remove enemies antigos
+            const enemies = document.querySelectorAll('.enemy');
+            enemies.forEach(e => e.remove());
+
+            // Resetar posição do jogador
+            playerX = (ROAD_WIDTH / 2) - (PLAYER_WIDTH / 2);
+            player.style.left = (50 + playerX) + 'px';
+
+            spawnEnemy();
+        }
+
+        function spawnEnemy() {
+            if (!gameRunning) return;
+            const enemy = document.createElement('div');
+            enemy.className = 'car enemy';
+            const width = 50;
+            enemy.style.width = width + 'px';
+            enemy.style.height = '90px';
+            // Posição aleatória dentro da pista, evitando colisão imediata
+            const maxX = ROAD_WIDTH - width;
+            let x = Math.floor(Math.random() * (maxX + 1));
+            const playerLeft = playerX;
+            const playerRight = playerX + PLAYER_WIDTH;
+            // Evita spawnar exatamente sobre o jogador
+            if (x < playerRight + 20 && x + width > playerLeft - 20) {
+                x = (x > playerX) ? 0 : maxX;
+            }
+            enemy.style.left = (50 + x) + 'px';
+            enemy.style.top = '-90px';
+            enemyContainer.appendChild(enemy);
+        }
+
+        function moveEnemies() {
+            if (!gameRunning || paused) return;
+            const enemies = document.querySelectorAll('.enemy');
+            enemies.forEach(enemy => {
+                let top = parseFloat(enemy.style.top);
+                top += speed;
+                enemy.style.top = top + 'px';
+
+                if (top > 600) {
+                    enemy.remove();
+                    score += 10;
+                    updateScore();
+                    // Aumenta a dificuldade
+                    if (score % 100 === 0) speed += 1;
+                }
+
+                // Colisão
+                const enemyRect = enemy.getBoundingClientRect();
+                const playerRect = player.getBoundingClientRect();
+                if (
+                    enemyRect.left < playerRect.right &&
+                    enemyRect.right > playerRect.left &&
+                    enemyRect.top < playerRect.bottom &&
+                    enemyRect.bottom > playerRect.top
+                ) {
+                    gameOver();
+                }
+            });
+        }
+
+        function movePlayer() {
+            if (!gameRunning || paused) return;
+            if (keys['arrowleft'] || keys['a']) playerX -= PLAYER_SPEED;
+            if (keys['arrowright'] || keys['d']) playerX += PLAYER_SPEED;
+
+            // Limites da pista
+            const minX = 0;
+            const maxX = ROAD_WIDTH - PLAYER_WIDTH;
+            playerX = Math.max(minX, Math.min(maxX, playerX));
+            player.style.left = (50 + playerX) + 'px';
+        }
+
+        function updateScore() {
+            scoreDisplay.textContent = 'Pontos: ' + score;
+        }
+
+        function gameOver() {
+            gameRunning = false;
+            finalScoreDisplay.textContent = 'Sua pontuação: ' + score;
+            if (score > record) {
+                record = score;
+                localStorage.setItem('record', record);
+            }
+            recordDisplay.textContent = 'Recorde: ' + record;
+            gameOverScreen.style.display = 'flex';
+        }
+
+        let lastSpawn = 0;
+        function gameLoop(t) {
+            requestAnimationFrame(gameLoop);
+            if (!gameRunning || paused) return;
+
+            // Spawna inimigos periodicamente
+            if (t - lastSpawn > 1500) {
+                spawnEnemy();
+                lastSpawn = t;
+            }
+
+            movePlayer();
+            moveEnemies();
+        }
+
+        startGame();
+        requestAnimationFrame(gameLoop);
+    </script>
 </body>
 </html>
