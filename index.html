@@ -72,6 +72,7 @@
             background: linear-gradient(180deg, #4ecdc4, #2c9e92);
             border: 3px solid #fff;
             z-index: 2;
+            transition: background 0.3s ease;
         }
 
         .enemy {
@@ -179,6 +180,28 @@
         let record = localStorage.getItem('record') || 0;
         recordDisplay.textContent = 'Recorde: ' + record;
 
+        const COLORS = [
+            ['#4ecdc4', '#2c9e92'],
+            ['#ff6b6b', '#c0392b'],
+            ['#ffd93d', '#e67e22'],
+            ['#6c5ce7', '#4834d4'],
+            ['#ff9ff3', '#f368e0'],
+            ['#00d2d3', '#01a3a4'],
+            ['#feca57', '#ff9f43'],
+            ['#54a0ff', '#2e86de'],
+            ['#5f27cd', '#341f97'],
+            ['#00d2d3', '#01a3a4']
+        ];
+        let colorIndex = 0;
+        let colorTimer = 0;
+
+        function changePlayerColor() {
+            colorIndex = (colorIndex + 1) % COLORS.length;
+            const c = COLORS[colorIndex];
+            player.style.background = `linear-gradient(180deg, ${c[0]}, ${c[1]})`;
+            player.style.boxShadow = `0 0 15px ${c[0]}`;
+        }
+
         let playerX = (ROAD_WIDTH / 2) - (PLAYER_WIDTH / 2);
         player.style.left = (50 + playerX) + 'px';
 
@@ -203,6 +226,10 @@
             speed = 4;
             gameRunning = true;
             paused = false;
+            colorIndex = 0;
+            colorTimer = 0;
+            player.style.background = `linear-gradient(180deg, ${COLORS[0][0]}, ${COLORS[0][1]})`;
+            player.style.boxShadow = 'none';
             updateScore();
 
             // Remove enemies antigos
@@ -303,6 +330,12 @@
             if (t - lastSpawn > 1500) {
                 spawnEnemy();
                 lastSpawn = t;
+            }
+
+            // Muda a cor do carro do jogador a cada 1.5s
+            if (t - colorTimer > 1500) {
+                changePlayerColor();
+                colorTimer = t;
             }
 
             movePlayer();
