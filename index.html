@@ -19,91 +19,89 @@
         }
         #ui {
             display: flex;
-            gap: 30px;
+            gap: 18px;
             margin-bottom: 8px;
-            font-size: 15px;
+            font-size: 14px;
             letter-spacing: 1px;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 480px;
         }
         #ui span { text-shadow: 0 0 8px rgba(255,255,255,0.3); }
-        #speed-bar-wrap {
-            width: 200px;
-            height: 10px;
-            background: #222;
-            border-radius: 5px;
-            overflow: hidden;
-            border: 1px solid #444;
+        .bar-wrap {
+            width: 120px; height: 10px;
+            background: #222; border-radius: 5px;
+            overflow: hidden; border: 1px solid #444;
         }
-        #speed-bar {
-            height: 100%;
-            width: 0%;
-            background: linear-gradient(90deg, #00ff88, #ffcc00, #ff3333);
-            border-radius: 5px;
-            transition: width 0.1s;
+        .bar-fill {
+            height: 100%; width: 0%; border-radius: 5px; transition: width 0.1s;
         }
+        #speed-bar { background: linear-gradient(90deg, #00ff88, #ffcc00, #ff3333); }
+        #hp-bar { background: linear-gradient(90deg, #ff3333, #ffaa00, #00ff88); }
+        #weapon-bar { background: linear-gradient(90deg, #00aaff, #aa55ff); }
         canvas {
             border-radius: 12px;
             box-shadow: 0 0 60px rgba(0,0,0,0.8), 0 0 20px rgba(0,150,255,0.15);
         }
         #color-label {
-            margin-top: 10px;
-            font-size: 13px;
-            color: #888;
-            height: 18px;
-            text-align: center;
+            margin-top: 10px; font-size: 12px; color: #888;
+            height: 16px; text-align: center;
         }
         #start-screen, #over-screen {
-            position: fixed;
-            top: 0; left: 0;
+            position: fixed; top: 0; left: 0;
             width: 100%; height: 100%;
             background: rgba(0,0,0,0.88);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
             z-index: 20;
         }
         #start-screen h1 {
-            font-size: 48px;
-            color: #00e5ff;
+            font-size: 48px; color: #00e5ff;
             margin-bottom: 8px;
             text-shadow: 0 0 30px rgba(0,229,255,0.5);
         }
-        #start-screen p { color: #aaa; margin-bottom: 24px; font-size: 15px; }
+        #start-screen p { color: #aaa; margin-bottom: 8px; font-size: 13px; }
         #over-screen h2 { font-size: 40px; color: #ff3333; margin-bottom: 10px; }
         #over-screen p { font-size: 18px; margin-bottom: 6px; color: #ccc; }
         .btn {
             margin-top: 18px;
             background: linear-gradient(135deg, #00e5ff, #0088cc);
-            color: #fff;
-            border: none;
-            padding: 14px 44px;
-            font-size: 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: bold;
-            letter-spacing: 1px;
+            color: #fff; border: none;
+            padding: 14px 44px; font-size: 20px;
+            border-radius: 8px; cursor: pointer;
+            font-weight: bold; letter-spacing: 1px;
         }
         .btn:hover { background: linear-gradient(135deg, #0088cc, #004466); }
-        #hidden { display: none; }
     </style>
 </head>
 <body>
     <div id="ui">
         <span id="ui-score">0 pts</span>
-        <div id="speed-bar-wrap"><div id="speed-bar"></div></div>
+        <div class="bar-wrap"><div class="bar-fill" id="hp-bar"></div></div>
+        <span id="ui-hp">100 HP</span>
+        <div class="bar-wrap"><div class="bar-fill" id="speed-bar"></div></div>
         <span id="ui-speed">0 km/h</span>
+    </div>
+    <div id="ui">
+        <span id="ui-weapon">PISTOLA</span>
+        <div class="bar-wrap"><div class="bar-fill" id="weapon-bar"></div></div>
+        <span id="ui-ammo">∞</span>
+        <span id="ui-kills">0 kills</span>
     </div>
     <canvas id="c"></canvas>
     <div id="color-label"></div>
 
     <div id="start-screen">
-        <h1>RACING</h1>
-        <p>Setas ou A/D para dirigir | Cor muda com o tempo</p>
+        <h1>WAR RACING</h1>
+        <p>Setas/WASD = dirigir | ESPAÇO = atirar | 1-2-3-4-5 = trocar arma</p>
+        <p>1 Pistola • 2 Metralhadora • 3 Escopeta • 4 Míssil • 5 SNIPER</p>
+        <p>Colete power-ups na pista | Cor muda com o tempo</p>
         <button class="btn" id="btn-start">INICIAR</button>
     </div>
     <div id="over-screen" style="display:none">
-        <h2>CRASH!</h2>
+        <h2>DESTRUÍDO!</h2>
         <p id="over-score"></p>
+        <p id="over-kills"></p>
         <p id="over-record"></p>
         <button class="btn" id="btn-retry">TENTAR DE NOVO</button>
     </div>
@@ -111,7 +109,6 @@
     <script>
     const canvas = document.getElementById('c');
     const ctx = canvas.getContext('2d');
-
     const W = 480, H = 720;
     canvas.width = W; canvas.height = H;
 
@@ -119,98 +116,200 @@
     const ROAD_W = ROAD_RIGHT - ROAD_LEFT;
     const LANES = [160, 240, 320];
 
+    const WEAPONS = {
+        pistol:    { name: 'PISTOLA',       ammo: Infinity, fireRate: 18, damage: 25,  bullets: 1, spread: 0,   speed: 14, color: '#ffff00', size: 3, sound: 'pop', maxAmmo: Infinity },
+        machine:   { name: 'METRALHADORA',  ammo: 120,      fireRate: 6,  damage: 12,  bullets: 1, spread: 0.06,speed: 16, color: '#ff8800', size: 2, sound: 'rat', maxAmmo: 120 },
+        shotgun:   { name: 'ESCOPETA',      ammo: 40,       fireRate: 30, damage: 18,  bullets: 5, spread: 0.12,speed: 12, color: '#ff4444', size: 3, sound: 'boom', maxAmmo: 40 },
+        missile:   { name: 'MISSIL',        ammo: 15,       fireRate: 50, damage: 100, bullets: 1, spread: 0,   speed: 8,  color: '#aa55ff', size: 6, sound: 'whoosh', maxAmmo: 15 },
+        sniper:    { name: 'SNIPER',        ammo: 25,       fireRate: 55, damage: 200, bullets: 1, spread: 0,   speed: 30, color: '#00ffcc', size: 4, sound: 'crack', maxAmmo: 25, pierce: true },
+    };
+
     let score, speed, maxSpeed, acceleration, gameRunning, paused;
     let record = parseInt(localStorage.getItem('rc') || '0');
     let playerX, playerY, playerVelY;
     let playerHue, targetHue, colorTimer, colorName;
-    let enemies, obstacles, particles, trees;
-    let roadOffset, lastSpawn, frameCount;
-    let tilt = 0;
+    let playerHP, maxHP, kills;
+    let currentWeapon, fireCooldown;
+    let bullets, enemies, pickups, particles, trees, explosions, trails;
+    let roadOffset, lastSpawn, frameCount, tilt;
+    let shakeTimer, shakeIntensity;
+    let missileLock;
 
     const keys = {};
     document.addEventListener('keydown', e => {
         keys[e.key] = true;
         if (e.key === 'p' || e.key === 'P') paused = !paused;
+        if (e.key === '1') switchWeapon('pistol');
+        if (e.key === '2') switchWeapon('machine');
+        if (e.key === '3') switchWeapon('shotgun');
+        if (e.key === '4') switchWeapon('missile');
+        if (e.key === '5') switchWeapon('sniper');
     });
     document.addEventListener('keyup', e => keys[e.key] = false);
 
+    function switchWeapon(type) {
+        if (WEAPONS[type].ammo > 0 || WEAPONS[type].ammo === Infinity) {
+            currentWeapon = type;
+            updateWeaponUI();
+        }
+    }
+
     const CAR_COLORS = [
-        { h: 0,   n: 'Vermelho',      body: '#cc1111', dark: '#881010', shine: '#ff4444' },
-        { h: 30,  n: 'Laranja',       body: '#dd6600', dark: '#994400', shine: '#ff9933' },
-        { h: 55,  n: 'Dourado',       body: '#ccaa00', dark: '#887700', shine: '#ffdd33' },
-        { h: 120, n: 'Verde',         body: '#11aa33', dark: '#0a7722', shine: '#33dd55' },
-        { h: 195, n: 'Azul Claro',    body: '#00aadd', dark: '#007799', shine: '#33ddff' },
-        { h: 230, n: 'Azul Escuro',   body: '#1133cc', dark: '#0a2288', shine: '#4466ff' },
-        { h: 280, n: 'Roxo',          body: '#7722cc', dark: '#441188', shine: '#aa55ff' },
-        { h: 330, n: 'Rosa',          body: '#cc2277', dark: '#881155', shine: '#ff44aa' },
-        { h: 0,   n: 'Branco',        body: '#ddddee', dark: '#999aaa', shine: '#ffffff' },
-        { h: 0,   n: 'Preto',         body: '#222228', dark: '#111115', shine: '#444450' },
+        { h: 0,   n: 'Vermelho' },
+        { h: 30,  n: 'Laranja' },
+        { h: 55,  n: 'Dourado' },
+        { h: 120, n: 'Verde' },
+        { h: 195, n: 'Azul Claro' },
+        { h: 230, n: 'Azul Escuro' },
+        { h: 280, n: 'Roxo' },
+        { h: 330, n: 'Rosa' },
+        { h: 0,   n: 'Branco' },
+        { h: 0,   n: 'Preto' },
     ];
 
-    function lerpColor(a, b, t) {
-        const ah = parseInt(a.body.slice(1),16);
-        const bh = parseInt(b.body.slice(1),16);
-        const ar=(ah>>16)&255, ag=(ah>>8)&255, ab=ah&255;
-        const br=(bh>>16)&255, bg=(bh>>8)&255, bb=bh&255;
-        const rr=Math.round(ar+(br-ar)*t);
-        const rg=Math.round(ag+(bg-ag)*t);
-        const rb=Math.round(ab+(bb-ab)*t);
-        const dh = parseInt(a.dark.slice(1),16);
-        const dhh = parseInt(b.dark.slice(1),16);
-        const dr=(dh>>16)&255, dg=(dh>>8)&255, db=dh&255;
-        const drr=(dhh>>16)&255, dgg=(dhh>>8)&255, dbb=dhh&255;
-        const dcr=Math.round(dr+(drr-dr)*t);
-        const dcg=Math.round(dg+(dgg-dg)*t);
-        const dcb=Math.round(db+(dbb-db)*t);
-        return {
-            body: '#' + ((1<<24)+(rr<<16)+(rg<<8)+rb).toString(16).slice(1),
-            dark: '#' + ((1<<24)+(dcr<<16)+(dcg<<8)+dcb).toString(16).slice(1),
-        };
-    }
+    const PICKUP_TYPES = [
+        { type: 'health',  color: '#00ff88', symbol: '+', label: 'VIDA' },
+        { type: 'machine', color: '#ff8800', symbol: 'M', label: 'METR.' },
+        { type: 'shotgun', color: '#ff4444', symbol: 'S', label: 'ESCO.' },
+        { type: 'missile', color: '#aa55ff', symbol: 'X', label: 'MISS.' },
+        { type: 'sniper',  color: '#00ffcc', symbol: '◎', label: 'SNIP.' },
+        { type: 'speed',   color: '#ffff00', symbol: '»', label: 'TURBO' },
+    ];
 
     function init() {
         score = 0; speed = 0; maxSpeed = 12; acceleration = 0.04;
         gameRunning = true; paused = false;
         playerX = 240; playerY = H - 140; playerVelY = 0;
         playerHue = 195; targetHue = 195; colorTimer = 0; colorName = 'Azul Claro';
-        enemies = []; obstacles = []; particles = []; trees = [];
+        playerHP = 100; maxHP = 100; kills = 0;
+        currentWeapon = 'pistol'; fireCooldown = 0;
+        bullets = []; enemies = []; pickups = []; particles = [];
+        trees = []; explosions = []; trails = [];
         roadOffset = 0; lastSpawn = 0; frameCount = 0; tilt = 0;
+        shakeTimer = 0; shakeIntensity = 0; missileLock = null;
 
         for (let i = 0; i < 20; i++) {
             trees.push({
-                x: Math.random() < 0.5 ? 30 + Math.random() * 55 : ROAD_RIGHT + 15 + Math.random() * 55,
+                x: Math.random() < 0.5 ? 30 + Math.random()*55 : ROAD_RIGHT + 15 + Math.random()*55,
                 y: Math.random() * H,
                 size: 15 + Math.random() * 20,
-                shade: `hsl(${120 + Math.random()*30}, ${40+Math.random()*20}%, ${20+Math.random()*15}%)`
+                shade: `hsl(${120+Math.random()*30}, ${40+Math.random()*20}%, ${20+Math.random()*15}%)`
             });
         }
+        // Reset ammo
+        WEAPONS.machine.ammo = 120;
+        WEAPONS.shotgun.ammo = 40;
+        WEAPONS.missile.ammo = 15;
+        WEAPONS.sniper.ammo = 25;
 
         document.getElementById('start-screen').style.display = 'none';
         document.getElementById('over-screen').style.display = 'none';
+        updateWeaponUI();
+    }
+
+    function updateWeaponUI() {
+        const w = WEAPONS[currentWeapon];
+        document.getElementById('ui-weapon').textContent = w.name;
+        document.getElementById('ui-ammo').textContent = w.ammo === Infinity ? '∞' : w.ammo;
+        const wb = document.getElementById('weapon-bar');
+        if (wb) {
+            if (currentWeapon === 'pistol') wb.style.width = '100%';
+            else wb.style.width = Math.max(0, (w.ammo / w.maxAmmo) * 100) + '%';
+        }
+    }
+
+    function shoot() {
+        if (fireCooldown > 0) return;
+        const w = WEAPONS[currentWeapon];
+        if (w.ammo <= 0) {
+            // sem munição: volta pra pistola automaticamente
+            if (currentWeapon !== 'pistol') switchWeapon('pistol');
+            return;
+        }
+
+        fireCooldown = w.fireRate;
+        if (w.ammo !== Infinity) { w.ammo--; updateWeaponUI(); }
+        if (w.ammo <= 0 && currentWeapon !== 'pistol') {
+            setTimeout(() => { if (WEAPONS[currentWeapon].ammo <= 0) switchWeapon('pistol'); }, 300);
+        }
+
+        const baseAngle = -Math.PI / 2;
+        for (let i = 0; i < w.bullets; i++) {
+            const angle = baseAngle + (i - (w.bullets - 1) / 2) * w.spread;
+            const vx = Math.cos(angle) * w.speed;
+            const vy = Math.sin(angle) * w.speed;
+            bullets.push({
+                x: playerX, y: playerY - 40,
+                vx, vy,
+                damage: w.damage,
+                color: w.color,
+                size: w.size,
+                type: currentWeapon,
+                life: currentWeapon === 'sniper' ? 120 : 80,
+                trail: currentWeapon === 'missile',
+                pierce: !!w.pierce,
+                hitIds: [],
+            });
+        }
+
+        // Muzzle flash + zoom flash da sniper
+        if (currentWeapon === 'sniper') {
+            addParticles(playerX, playerY - 45, '#ffffff', 8);
+            addParticles(playerX, playerY - 45, w.color, 12);
+            // linha de mira instantânea (efeito laser rápido)
+            trails.push({ x: playerX, y: playerY - 40, life: 8, color: w.color });
+            shakeTimer = 10;
+            shakeIntensity = 5;
+        } else {
+            addParticles(playerX, playerY - 45, w.color, 5);
+            shakeTimer = 4;
+            shakeIntensity = currentWeapon === 'missile' ? 6 : 2;
+        }
     }
 
     function spawnEnemy() {
         const lane = LANES[Math.floor(Math.random() * 3)];
         const type = Math.random();
-        let w, h, colorIdx;
-        if (type < 0.4) {
-            w = 48; h = 85; colorIdx = Math.floor(Math.random() * CAR_COLORS.length);
-        } else if (type < 0.7) {
-            w = 52; h = 95; colorIdx = Math.floor(Math.random() * CAR_COLORS.length);
+        let w, h, colorIdx, hp;
+        if (type < 0.3) {
+            w = 48; h = 85; colorIdx = Math.floor(Math.random() * CAR_COLORS.length); hp = 25;
+        } else if (type < 0.6) {
+            w = 52; h = 95; colorIdx = Math.floor(Math.random() * CAR_COLORS.length); hp = 50;
+        } else if (type < 0.85) {
+            w = 58; h = 105; colorIdx = Math.floor(Math.random() * CAR_COLORS.length); hp = 80;
         } else {
-            w = 58; h = 105; colorIdx = Math.floor(Math.random() * CAR_COLORS.length);
+            w = 64; h = 120; colorIdx = Math.floor(Math.random() * CAR_COLORS.length); hp = 150;
         }
         enemies.push({
-            x: lane, y: -h, w, h, speed: 1.5 + Math.random() * 2.5,
-            color: CAR_COLORS[colorIdx], lane, steerTimer: 0, steerDir: 0
+            x: lane, y: -h, w, h, hp, maxHp: hp,
+            speed: 1.5 + Math.random() * 2.5,
+            colorIdx, color: CAR_COLORS[colorIdx],
+            lane, steerTimer: 0, steerDir: 0, flash: 0
         });
+    }
+
+    function spawnPickup() {
+        const lane = LANES[Math.floor(Math.random() * 3)];
+        const type = PICKUP_TYPES[Math.floor(Math.random() * PICKUP_TYPES.length)];
+        pickups.push({ x: lane, y: -30, type: type.type, color: type.color, symbol: type.symbol, label: type.label, life: 400 });
+    }
+
+    function addExplosion(x, y, size, color) {
+        explosions.push({ x, y, size, maxSize: size, life: 30, color });
+        addParticles(x, y, color, 25);
+        addParticles(x, y, '#ffaa00', 15);
+        addParticles(x, y, '#fff', 10);
+        shakeTimer = 8;
+        shakeIntensity = size * 0.15;
     }
 
     function addParticles(x, y, col, count) {
         for (let i = 0; i < count; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const spd = 1 + Math.random() * 5;
             particles.push({
-                x, y, vx: (Math.random()-0.5)*6, vy: (Math.random()-0.5)*6,
-                life: 30 + Math.random()*30, color: col, size: 2 + Math.random()*4
+                x, y, vx: Math.cos(angle)*spd, vy: Math.sin(angle)*spd,
+                life: 20 + Math.random()*30, color: col, size: 1 + Math.random()*4
             });
         }
     }
@@ -225,14 +324,27 @@
         }
     }
 
-    function drawCar(x, y, w, h, col, isPlayer, tiltAmt) {
+    function addMissileTrail(x, y) {
+        particles.push({
+            x: x + (Math.random()-0.5)*4, y: y + 10,
+            vx: (Math.random()-0.5)*1, vy: 2 + Math.random()*2,
+            life: 12 + Math.random()*8, color: 'rgba(255,100,0,0.7)', size: 3 + Math.random()*3
+        });
+        particles.push({
+            x: x + (Math.random()-0.5)*4, y: y + 10,
+            vx: (Math.random()-0.5)*0.5, vy: 1 + Math.random(),
+            life: 8 + Math.random()*6, color: 'rgba(200,200,200,0.4)', size: 5 + Math.random()*4
+        });
+    }
+
+    function drawCar(x, y, w, h, hue, isPlayer, tiltAmt, flashTimer) {
         ctx.save();
         ctx.translate(x, y);
         ctx.rotate(tiltAmt * 0.03);
 
         const bw = w, bh = h;
-        const bodyColor = col.body;
-        const darkColor = col.dark;
+        const bodyColor = `hsl(${hue}, 70%, 45%)`;
+        const darkColor = `hsl(${hue}, 70%, 28%)`;
 
         // Shadow
         ctx.fillStyle = 'rgba(0,0,0,0.35)';
@@ -240,27 +352,34 @@
         ctx.ellipse(4, 6, bw/2+4, bh/2-2, 0, 0, Math.PI*2);
         ctx.fill();
 
-        // Body main
+        // Body
         const grad = ctx.createLinearGradient(-bw/2, 0, bw/2, 0);
         grad.addColorStop(0, darkColor);
         grad.addColorStop(0.35, bodyColor);
         grad.addColorStop(0.65, bodyColor);
         grad.addColorStop(1, darkColor);
         ctx.fillStyle = grad;
-
         ctx.beginPath();
         ctx.roundRect(-bw/2, -bh/2, bw, bh, [8,8,12,12]);
         ctx.fill();
 
-        // Windshield area
-        const wsY = isPlayer ? -bh/2 + 14 : -bh/2 + 18;
+        // Hit flash
+        if (flashTimer > 0) {
+            ctx.fillStyle = `rgba(255,255,255,${flashTimer/10})`;
+            ctx.beginPath();
+            ctx.roundRect(-bw/2, -bh/2, bw, bh, [8,8,12,12]);
+            ctx.fill();
+        }
+
+        // Windshield
+        const wsY = isPlayer ? -bh/2+14 : -bh/2+18;
         ctx.fillStyle = 'rgba(150,200,255,0.3)';
         ctx.beginPath();
         ctx.roundRect(-bw/2+5, wsY, bw-10, bh*0.22, 4);
         ctx.fill();
 
         // Rear window
-        const rwY = isPlayer ? bh/2 - bh*0.32 : bh/2 - bh*0.28;
+        const rwY = isPlayer ? bh/2-bh*0.32 : bh/2-bh*0.28;
         ctx.fillStyle = 'rgba(100,150,200,0.25)';
         ctx.beginPath();
         ctx.roundRect(-bw/2+6, rwY, bw-12, bh*0.15, 3);
@@ -274,48 +393,45 @@
 
         // Headlights / taillights
         if (isPlayer) {
-            // Headlights (front = top of car = away from viewer)
             ctx.fillStyle = '#ffffcc';
-            ctx.shadowColor = '#ffffaa';
-            ctx.shadowBlur = 8;
+            ctx.shadowColor = '#ffffaa'; ctx.shadowBlur = 8;
             ctx.fillRect(-bw/2+3, -bh/2, 8, 4);
             ctx.fillRect(bw/2-11, -bh/2, 8, 4);
             ctx.shadowBlur = 0;
-            // Taillights
             ctx.fillStyle = '#ff2222';
-            ctx.shadowColor = '#ff0000';
-            ctx.shadowBlur = 6;
+            ctx.shadowColor = '#ff0000'; ctx.shadowBlur = 6;
             ctx.fillRect(-bw/2+3, bh/2-5, 8, 5);
             ctx.fillRect(bw/2-11, bh/2-5, 8, 5);
             ctx.shadowBlur = 0;
         } else {
-            // Headlights facing player (bottom)
             ctx.fillStyle = '#ffffaa';
-            ctx.shadowColor = '#ffffcc';
-            ctx.shadowBlur = 6;
+            ctx.shadowColor = '#ffffcc'; ctx.shadowBlur = 6;
             ctx.fillRect(-bw/2+4, bh/2-4, 7, 4);
             ctx.fillRect(bw/2-11, bh/2-4, 7, 4);
             ctx.shadowBlur = 0;
-            // Taillights (top)
             ctx.fillStyle = '#ff3333';
             ctx.fillRect(-bw/2+4, -bh/2, 7, 4);
             ctx.fillRect(bw/2-11, -bh/2, 7, 4);
+
+            // HP bar
+            const hpPct = (isPlayer ? playerHP : 0) / 100;
+            if (!isPlayer && flashTimer !== undefined) {}
         }
 
         // Wheels
         ctx.fillStyle = '#111';
         const wheelW = 6, wheelH = 14;
-        ctx.fillRect(-bw/2 - 2, -bh/2+8, wheelW, wheelH);
-        ctx.fillRect(bw/2 - wheelW + 2, -bh/2+8, wheelW, wheelH);
-        ctx.fillRect(-bw/2 - 2, bh/2 - 8 - wheelH, wheelW, wheelH);
-        ctx.fillRect(bw/2 - wheelW + 2, bh/2 - 8 - wheelH, wheelW, wheelH);
+        ctx.fillRect(-bw/2-2, -bh/2+8, wheelW, wheelH);
+        ctx.fillRect(bw/2-wheelW+2, -bh/2+8, wheelW, wheelH);
+        ctx.fillRect(-bw/2-2, bh/2-8-wheelH, wheelW, wheelH);
+        ctx.fillRect(bw/2-wheelW+2, bh/2-8-wheelH, wheelW, wheelH);
 
-        // Side mirrors
+        // Mirrors
         ctx.fillStyle = darkColor;
-        ctx.fillRect(-bw/2 - 5, -bh/2+16, 5, 5);
+        ctx.fillRect(-bw/2-5, -bh/2+16, 5, 5);
         ctx.fillRect(bw/2, -bh/2+16, 5, 5);
 
-        // Sporty stripe
+        // Sport stripe
         if (isPlayer) {
             ctx.fillStyle = 'rgba(255,255,255,0.15)';
             ctx.fillRect(-2, -bh/2, 4, bh);
@@ -325,7 +441,6 @@
     }
 
     function drawRoad() {
-        // Sky / grass gradient
         const skyGrad = ctx.createLinearGradient(0, 0, 0, H);
         skyGrad.addColorStop(0, '#0d1b0e');
         skyGrad.addColorStop(0.3, '#1a3320');
@@ -333,92 +448,176 @@
         ctx.fillStyle = skyGrad;
         ctx.fillRect(0, 0, W, H);
 
-        // Grass texture
         ctx.fillStyle = 'rgba(50,120,50,0.15)';
         for (let i = 0; i < 60; i++) {
-            const gx = (i * 137.5) % W;
-            const gy = ((i * 89.3 + roadOffset * 0.3) % (H + 40)) - 20;
+            const gx = (i*137.5) % W;
+            const gy = ((i*89.3 + roadOffset*0.3) % (H+40)) - 20;
             ctx.fillRect(gx, gy, 2, 6);
         }
 
-        // Road surface
         const roadGrad = ctx.createLinearGradient(ROAD_LEFT, 0, ROAD_RIGHT, 0);
         roadGrad.addColorStop(0, '#2a2a2a');
-        roadGrad.addColorStop(0.08, '#333333');
+        roadGrad.addColorStop(0.08, '#333');
         roadGrad.addColorStop(0.5, '#3a3a3a');
-        roadGrad.addColorStop(0.92, '#333333');
+        roadGrad.addColorStop(0.92, '#333');
         roadGrad.addColorStop(1, '#2a2a2a');
         ctx.fillStyle = roadGrad;
         ctx.fillRect(ROAD_LEFT, 0, ROAD_W, H);
 
-        // Road edges
         ctx.fillStyle = '#fff';
         ctx.fillRect(ROAD_LEFT, 0, 3, H);
-        ctx.fillRect(ROAD_RIGHT - 3, 0, 3, H);
+        ctx.fillRect(ROAD_RIGHT-3, 0, 3, H);
 
-        // Shoulder stripes (red-white)
         const stripeH = 30;
-        for (let y = (-roadOffset % (stripeH * 2)); y < H; y += stripeH * 2) {
+        for (let y = (-roadOffset%(stripeH*2)); y < H; y += stripeH*2) {
             ctx.fillStyle = '#cc2222';
-            ctx.fillRect(ROAD_LEFT + 3, y, 6, stripeH);
-            ctx.fillRect(ROAD_RIGHT - 9, y, 6, stripeH);
+            ctx.fillRect(ROAD_LEFT+3, y, 6, stripeH);
+            ctx.fillRect(ROAD_RIGHT-9, y, 6, stripeH);
         }
 
-        // Lane dashed lines
         ctx.setLineDash([30, 30]);
         ctx.lineDashOffset = -roadOffset;
         ctx.strokeStyle = 'rgba(255,255,255,0.35)';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.moveTo((LANES[0] + LANES[1]) / 2, 0);
-        ctx.lineTo((LANES[0] + LANES[1]) / 2, H);
-        ctx.moveTo((LANES[1] + LANES[2]) / 2, 0);
-        ctx.lineTo((LANES[1] + LANES[2]) / 2, H);
+        ctx.moveTo((LANES[0]+LANES[1])/2, 0);
+        ctx.lineTo((LANES[0]+LANES[1])/2, H);
+        ctx.moveTo((LANES[1]+LANES[2])/2, 0);
+        ctx.lineTo((LANES[1]+LANES[2])/2, H);
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // Trees
         trees.forEach(t => {
             ctx.fillStyle = '#1a1208';
-            ctx.fillRect(t.x - 3, t.y, 6, 12);
+            ctx.fillRect(t.x-3, t.y, 6, 12);
             ctx.fillStyle = t.shade;
             ctx.beginPath();
-            ctx.arc(t.x, t.y - 2, t.size * 0.5, 0, Math.PI * 2);
+            ctx.arc(t.x, t.y-2, t.size*0.5, 0, Math.PI*2);
             ctx.fill();
             ctx.fillStyle = 'rgba(80,180,60,0.3)';
             ctx.beginPath();
-            ctx.arc(t.x - 3, t.y - 5, t.size * 0.3, 0, Math.PI * 2);
+            ctx.arc(t.x-3, t.y-5, t.size*0.3, 0, Math.PI*2);
             ctx.fill();
         });
     }
 
-    function drawPlayerCar() {
-        const currentCol = {
-            body: `hsl(${playerHue}, 70%, 45%)`,
-            dark: `hsl(${playerHue}, 70%, 28%)`,
-            shine: `hsl(${playerHue}, 80%, 65%)`
-        };
-        drawCar(playerX, playerY, 52, 90, currentCol, true, tilt);
+    function drawPickups() {
+        pickups.forEach(p => {
+            const bob = Math.sin(frameCount * 0.06) * 4;
+            ctx.save();
+            ctx.translate(p.x, p.y + bob);
 
-        // Exhaust glow when accelerating
-        if (speed > 2 && (keys['ArrowUp'] || keys['w'] || keys['W'])) {
-            ctx.fillStyle = `rgba(255,${150 + Math.random()*100},0,${0.2 + Math.random()*0.3})`;
+            // Glow
+            ctx.shadowColor = p.color;
+            ctx.shadowBlur = 15 + Math.sin(frameCount * 0.1) * 5;
+
+            // Box
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
             ctx.beginPath();
-            ctx.arc(playerX - 10, playerY + 48, 3 + Math.random()*3, 0, Math.PI*2);
-            ctx.arc(playerX + 10, playerY + 48, 3 + Math.random()*3, 0, Math.PI*2);
+            ctx.roundRect(-18, -18, 36, 36, 6);
             ctx.fill();
-        }
+            ctx.strokeStyle = p.color;
+            ctx.lineWidth = 2;
+            ctx.stroke();
 
-        // Color glow
-        ctx.save();
-        ctx.shadowColor = `hsl(${playerHue}, 70%, 50%)`;
-        ctx.shadowBlur = 15 + Math.sin(frameCount * 0.05) * 5;
-        ctx.restore();
+            // Symbol
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = p.color;
+            ctx.font = 'bold 18px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(p.symbol, 0, 1);
+
+            ctx.restore();
+        });
+    }
+
+    function drawBullets() {
+        bullets.forEach(b => {
+            ctx.save();
+            ctx.shadowColor = b.color;
+            ctx.shadowBlur = b.type === 'missile' ? 15 : 8;
+
+            if (b.type === 'missile') {
+                // Missile body
+                ctx.fillStyle = '#666';
+                ctx.beginPath();
+                ctx.roundRect(b.x-3, b.y-8, 6, 16, 3);
+                ctx.fill();
+                ctx.fillStyle = b.color;
+                ctx.fillRect(b.x-1, b.y-6, 2, 12);
+                // Fins
+                ctx.fillStyle = '#444';
+                ctx.fillRect(b.x-6, b.y+4, 3, 5);
+                ctx.fillRect(b.x+3, b.y+4, 3, 5);
+                // Trail
+                addMissileTrail(b.x, b.y);
+            } else if (b.type === 'sniper') {
+                // Bala de sniper: núcleo brilhante + rastro longo
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, b.size, 0, Math.PI*2);
+                ctx.fill();
+                ctx.fillStyle = b.color;
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, b.size * 0.55, 0, Math.PI*2);
+                ctx.fill();
+                // Rastro laser vertical
+                ctx.globalAlpha = 0.55;
+                ctx.fillStyle = b.color;
+                ctx.fillRect(b.x - 1.5, b.y, 3, 60);
+                ctx.globalAlpha = 0.2;
+                ctx.fillRect(b.x - 3, b.y, 6, 90);
+                ctx.globalAlpha = 1;
+            } else {
+                ctx.fillStyle = b.color;
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, b.size, 0, Math.PI*2);
+                ctx.fill();
+                // Bullet trail
+                ctx.globalAlpha = 0.3;
+                ctx.fillRect(b.x-1, b.y, 2, 12);
+            }
+
+            ctx.restore();
+        });
+    }
+
+    function drawExplosions() {
+        explosions.forEach(e => {
+            const progress = 1 - e.life / 30;
+            const r = e.maxSize * (0.3 + progress * 0.7);
+            ctx.save();
+            ctx.globalAlpha = e.life / 30;
+
+            // Outer ring
+            const ringGrad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, r);
+            ringGrad.addColorStop(0, '#fff');
+            ringGrad.addColorStop(0.3, '#ffaa00');
+            ringGrad.addColorStop(0.7, e.color);
+            ringGrad.addColorStop(1, 'transparent');
+            ctx.fillStyle = ringGrad;
+            ctx.beginPath();
+            ctx.arc(e.x, e.y, r, 0, Math.PI*2);
+            ctx.fill();
+
+            // Inner bright core
+            ctx.fillStyle = `rgba(255,255,200,${e.life/40})`;
+            ctx.beginPath();
+            ctx.arc(e.x, e.y, r*0.3, 0, Math.PI*2);
+            ctx.fill();
+
+            ctx.restore();
+        });
     }
 
     function update() {
         if (!gameRunning || paused) return;
         frameCount++;
+
+        // Fire cooldown
+        if (fireCooldown > 0) fireCooldown--;
+        if (keys[' ']) shoot();
 
         // Speed control
         if (keys['ArrowUp'] || keys['w'] || keys['W']) {
@@ -440,20 +639,15 @@
         } else {
             tilt *= 0.85;
         }
-
-        // Clamp
-        playerX = Math.max(ROAD_LEFT + 30, Math.min(ROAD_RIGHT - 30, playerX));
-
-        // Road scroll
+        playerX = Math.max(ROAD_LEFT+30, Math.min(ROAD_RIGHT-30, playerX));
         roadOffset += speed;
 
-        // Tire smoke at high speed turns
         if (speed > 6 && Math.abs(tilt) > 1.5) {
-            addTireSmoke(playerX - 12, playerY + 40);
-            addTireSmoke(playerX + 12, playerY + 40);
+            addTireSmoke(playerX-12, playerY+40);
+            addTireSmoke(playerX+12, playerY+40);
         }
 
-        // Color change over time
+        // Color change
         colorTimer++;
         if (colorTimer % 180 === 0) {
             const idx = Math.floor(Math.random() * CAR_COLORS.length);
@@ -462,102 +656,271 @@
         }
         if (playerHue !== targetHue) {
             const diff = targetHue - playerHue;
-            let step = diff * 0.03;
             if (Math.abs(diff) < 2) playerHue = targetHue;
-            else playerHue += step;
+            else playerHue += diff * 0.03;
         }
 
         // Spawn enemies
-        if (frameCount - lastSpawn > Math.max(60, 160 - speed * 8)) {
+        if (frameCount - lastSpawn > Math.max(50, 150 - speed * 8)) {
             spawnEnemy();
             lastSpawn = frameCount;
         }
 
+        // Spawn pickups
+        if (frameCount % 300 === 0 && Math.random() < 0.5) {
+            spawnPickup();
+        }
+
+        // Move bullets
+        bullets.forEach(b => {
+            b.x += b.vx;
+            b.y += b.vy;
+            b.life--;
+            if (b.type !== 'missile') b.vy -= 0.02; // slight spread
+        });
+        bullets = bullets.filter(b => b.life > 0 && b.y > -20 && b.y < H + 20 && b.x > 0 && b.x < W);
+
         // Move enemies
         enemies.forEach(e => {
             e.y += speed - e.speed + 1;
-            // Slight lateral movement for some
             e.steerTimer++;
             if (e.steerTimer > 120) {
-                e.steerDir = (Math.random() - 0.5) * 0.3;
+                e.steerDir = (Math.random()-0.5) * 0.3;
                 e.steerTimer = 0;
             }
             e.x += e.steerDir;
-            e.x = Math.max(ROAD_LEFT + 30, Math.min(ROAD_RIGHT - 30, e.x));
+            e.x = Math.max(ROAD_LEFT+30, Math.min(ROAD_RIGHT-30, e.x));
+            if (e.flash > 0) e.flash--;
         });
 
-        // Remove off-screen
-        enemies = enemies.filter(e => {
-            if (e.y > H + 100) {
-                score += 10;
-                return false;
-            }
-            return true;
-        });
+        // Bullet vs enemy collision (sniper perfura vários inimigos)
+        bullets.forEach((b, bi) => {
+            // identifica bala por índice para controle de perfuração
+            if (b._id === undefined) b._id = frameCount * 1000 + bi;
+            enemies.forEach((e, ei) => {
+                if (b.pierce && b.hitIds.includes(e)) return;
+                const dx = Math.abs(b.x - e.x);
+                const dy = Math.abs(b.y - e.y);
+                if (dx < e.w/2 + b.size + 2 && dy < e.h/2 + b.size + 2) {
+                    e.hp -= b.damage;
+                    e.flash = 8;
+                    addParticles(b.x, b.y, b.color, b.type === 'sniper' ? 12 : 4);
+                    if (b.type === 'sniper') {
+                        b.hitIds.push(e);
+                        // não destrói a bala, continua perfurando
+                    } else {
+                        b.life = 0;
+                    }
 
-        // Collision
-        enemies.forEach(e => {
+                    if (e.hp <= 0) {
+                        const col = `hsl(${CAR_COLORS[e.colorIdx].h}, 70%, 50%)`;
+                        addExplosion(e.x, e.y, 40 + e.maxHp * 0.2, col);
+                        score += 25 + Math.floor(e.maxHp / 10) + (b.type === 'sniper' ? 15 : 0);
+                        kills++;
+                        document.getElementById('ui-kills').textContent = kills + ' kills';
+                        enemies.splice(ei, 1);
+                    }
+                }
+            });
+        });
+        bullets = bullets.filter(b => b.life > 0);
+
+        // Player vs enemy collision
+        enemies.forEach((e, ei) => {
             const dx = Math.abs(playerX - e.x);
             const dy = Math.abs(playerY - e.y);
             if (dx < (26 + e.w/2 - 4) && dy < (40 + e.h/2 - 4)) {
-                addParticles(playerX, playerY, '#ffaa00', 40);
-                addParticles(playerX, playerY, '#ff4444', 20);
-                gameRunning = false;
-                document.getElementById('over-score').textContent = 'Pontuação: ' + score;
-                if (score > record) { record = score; localStorage.setItem('rc', record); }
-                document.getElementById('over-record').textContent = 'Recorde: ' + record;
-                document.getElementById('over-screen').style.display = 'flex';
+                playerHP -= 30;
+                addExplosion(playerX, playerY, 30, '#ff4444');
+                enemies.splice(ei, 1);
+                if (playerHP <= 0) {
+                    addExplosion(playerX, playerY, 60, '#ff0000');
+                    gameRunning = false;
+                    document.getElementById('over-score').textContent = 'Pontuação: ' + score;
+                    document.getElementById('over-kills').textContent = 'Inimigos destruídos: ' + kills;
+                    if (score > record) { record = score; localStorage.setItem('rc', record); }
+                    document.getElementById('over-record').textContent = 'Recorde: ' + record;
+                    document.getElementById('over-screen').style.display = 'flex';
+                }
             }
+        });
+
+        // Pickup collection
+        pickups = pickups.filter(p => {
+            p.y += speed;
+            p.life--;
+            const dx = Math.abs(playerX - p.x);
+            const dy = Math.abs(playerY - p.y);
+            if (dx < 30 && dy < 40) {
+                applyPickup(p.type);
+                addParticles(p.x, p.y, p.color, 10);
+                return false;
+            }
+            return p.life > 0 && p.y < H + 30;
+        });
+
+        // Remove off-screen enemies
+        enemies = enemies.filter(e => {
+            if (e.y > H + 100) { score += 10; return false; }
+            return true;
         });
 
         // Particles
         particles.forEach(p => {
-            p.x += p.vx;
-            p.y += p.vy;
-            p.life--;
-            p.size *= 0.97;
+            p.x += p.vx; p.y += p.vy;
+            p.vx *= 0.97; p.vy *= 0.97;
+            p.life--; p.size *= 0.97;
         });
         particles = particles.filter(p => p.life > 0);
 
-        // Tree scroll
+        // Explosions
+        explosions.forEach(e => { e.life--; });
+        explosions = explosions.filter(e => e.life > 0);
+
+        // Sniper laser trails (somem rápido)
+        trails.forEach(t => { t.life--; });
+        trails = trails.filter(t => t.life > 0);
+
+        // Trees
         trees.forEach(t => {
             t.y += speed;
             if (t.y > H + 40) {
                 t.y = -30;
-                t.x = Math.random() < 0.5 ? 30 + Math.random()*55 : ROAD_RIGHT + 15 + Math.random()*55;
+                t.x = Math.random() < 0.5 ? 30+Math.random()*55 : ROAD_RIGHT+15+Math.random()*55;
             }
         });
+
+        // Screen shake
+        if (shakeTimer > 0) shakeTimer--;
 
         // UI
         const kmh = Math.round(speed / maxSpeed * 320);
         document.getElementById('ui-speed').textContent = kmh + ' km/h';
         document.getElementById('speed-bar').style.width = (speed / maxSpeed * 100) + '%';
         document.getElementById('ui-score').textContent = score + ' pts';
+        document.getElementById('ui-hp').textContent = Math.max(0, playerHP) + ' HP';
+        document.getElementById('hp-bar').style.width = (Math.max(0, playerHP) / maxHP * 100) + '%';
         document.getElementById('color-label').textContent = 'Cor: ' + colorName;
     }
 
-    function draw() {
-        drawRoad();
+    function applyPickup(type) {
+        switch(type) {
+            case 'health':
+                playerHP = Math.min(maxHP, playerHP + 30);
+                break;
+            case 'machine':
+                WEAPONS.machine.ammo += 60;
+                if (currentWeapon !== 'pistol') currentWeapon = 'machine';
+                break;
+            case 'shotgun':
+                WEAPONS.shotgun.ammo += 20;
+                if (currentWeapon === 'pistol') currentWeapon = 'shotgun';
+                break;
+            case 'missile':
+                WEAPONS.missile.ammo += 5;
+                currentWeapon = 'missile';
+                break;
+            case 'sniper':
+                WEAPONS.sniper.ammo += 10;
+                currentWeapon = 'sniper';
+                break;
+            case 'speed':
+                maxSpeed = Math.min(18, maxSpeed + 1);
+                break;
+        }
+        updateWeaponUI();
+    }
 
-        // Enemies
+    function draw() {
+        ctx.save();
+        // Screen shake
+        if (shakeTimer > 0) {
+            const sx = (Math.random()-0.5) * shakeIntensity;
+            const sy = (Math.random()-0.5) * shakeIntensity;
+            ctx.translate(sx, sy);
+        }
+
+        drawRoad();
+        drawPickups();
+
+        // Enemies with HP bars
         enemies.forEach(e => {
-            drawCar(e.x, e.y, e.w, e.h, e.color, false, 0);
+            drawCar(e.x, e.y, e.w, e.h, CAR_COLORS[e.colorIdx].h, false, 0, e.flash);
+            // HP bar
+            const barW = e.w - 6;
+            const hpPct = e.hp / e.maxHp;
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.fillRect(e.x - barW/2, e.y - e.h/2 - 8, barW, 4);
+            ctx.fillStyle = hpPct > 0.5 ? '#00ff88' : hpPct > 0.25 ? '#ffaa00' : '#ff3333';
+            ctx.fillRect(e.x - barW/2, e.y - e.h/2 - 8, barW * hpPct, 4);
         });
 
-        // Player
         drawPlayerCar();
+        drawBullets();
+        drawExplosions();
+
+        // Laser instantâneo do tiro de sniper
+        trails.forEach(t => {
+            ctx.save();
+            ctx.globalAlpha = t.life / 8;
+            ctx.strokeStyle = t.color;
+            ctx.shadowColor = t.color;
+            ctx.shadowBlur = 12;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(t.x, t.y);
+            ctx.lineTo(t.x, 0);
+            ctx.stroke();
+            ctx.restore();
+        });
+
+        // Mira telescópica da sniper (zoom)
+        if (currentWeapon === 'sniper' && gameRunning) {
+            ctx.save();
+            // escurece as bordas
+            const vg = ctx.createRadialGradient(playerX, playerY - 150, 80, playerX, playerY - 150, 420);
+            vg.addColorStop(0, 'rgba(0,255,204,0)');
+            vg.addColorStop(1, 'rgba(0,0,0,0.55)');
+            ctx.fillStyle = vg;
+            ctx.fillRect(0, 0, W, H);
+            // linha de mira até o topo
+            ctx.strokeStyle = 'rgba(0,255,204,0.5)';
+            ctx.setLineDash([8, 8]);
+            ctx.lineWidth = 1.5;
+            ctx.shadowColor = '#00ffcc';
+            ctx.shadowBlur = 6;
+            ctx.beginPath();
+            ctx.moveTo(playerX, playerY - 45);
+            ctx.lineTo(playerX, 0);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            // cruz no topo da mira
+            ctx.beginPath();
+            ctx.arc(playerX, 60, 18, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(playerX - 26, 60);
+            ctx.lineTo(playerX + 26, 60);
+            ctx.moveTo(playerX, 34);
+            ctx.lineTo(playerX, 86);
+            ctx.stroke();
+            ctx.fillStyle = '#00ffcc';
+            ctx.font = 'bold 11px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('SNIPER', playerX, 105);
+            ctx.restore();
+        }
 
         // Particles
         particles.forEach(p => {
-            ctx.globalAlpha = p.life / 60;
+            ctx.globalAlpha = Math.min(1, p.life / 20);
             ctx.fillStyle = p.color;
             ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
             ctx.fill();
         });
         ctx.globalAlpha = 1;
 
-        // Pause overlay
         if (paused) {
             ctx.fillStyle = 'rgba(0,0,0,0.6)';
             ctx.fillRect(0, 0, W, H);
@@ -565,6 +928,46 @@
             ctx.font = 'bold 36px sans-serif';
             ctx.textAlign = 'center';
             ctx.fillText('PAUSADO', W/2, H/2);
+        }
+
+        ctx.restore();
+    }
+
+    function drawPlayerCar() {
+        drawCar(playerX, playerY, 52, 90, playerHue, true, tilt, 0);
+
+        // Exhaust
+        if (speed > 2 && (keys['ArrowUp'] || keys['w'] || keys['W'])) {
+            ctx.fillStyle = `rgba(255,${150+Math.random()*100},0,${0.2+Math.random()*0.3})`;
+            ctx.beginPath();
+            ctx.arc(playerX-10, playerY+48, 3+Math.random()*3, 0, Math.PI*2);
+            ctx.arc(playerX+10, playerY+48, 3+Math.random()*3, 0, Math.PI*2);
+            ctx.fill();
+        }
+
+        // Weapon indicator on car
+        if (currentWeapon === 'missile') {
+            ctx.fillStyle = '#aa55ff';
+            ctx.fillRect(playerX-14, playerY-10, 4, 14);
+            ctx.fillRect(playerX+10, playerY-10, 4, 14);
+        } else if (currentWeapon === 'shotgun') {
+            ctx.fillStyle = '#ff4444';
+            ctx.fillRect(playerX-15, playerY-8, 3, 10);
+            ctx.fillRect(playerX+12, playerY-8, 3, 10);
+        } else if (currentWeapon === 'machine') {
+            ctx.fillStyle = '#ff8800';
+            ctx.fillRect(playerX-13, playerY-6, 2, 8);
+            ctx.fillRect(playerX+11, playerY-6, 2, 8);
+        } else if (currentWeapon === 'sniper') {
+            // cano longo da sniper no carro
+            ctx.fillStyle = '#00ffcc';
+            ctx.shadowColor = '#00ffcc'; ctx.shadowBlur = 8;
+            ctx.fillRect(playerX-2, playerY-70, 4, 32);
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = '#003833';
+            ctx.beginPath();
+            ctx.arc(playerX, playerY-70, 5, 0, Math.PI*2);
+            ctx.fill();
         }
     }
 
